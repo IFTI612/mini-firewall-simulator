@@ -14,26 +14,26 @@ patterns. Built with **Python + Tkinter + PostgreSQL + Matplotlib**.
 
 ## Features
 
-| # | Feature |
-|---|---------|
-| 1 | Local packet simulation (normal traffic + three attack scenarios) |
-| 2 | Rule engine: source/destination IP and port, protocol, ALLOW/BLOCK, priority, default DENY |
-| 3 | Attack detection: port scan, brute force, traffic flood |
-| 4 | Automatic alert generation with optional automatic IP blocking |
-| 5 | IP whitelist and blacklist |
-| 6 | PostgreSQL storage for traffic logs, rules, alerts and IP lists |
-| 7 | Seven-tab Tkinter GUI |
-| 8 | Live dashboard with Matplotlib charts |
-| 9 | CSV export of traffic logs and security alerts |
+| #   | Feature                                                                                    |
+| --- | ------------------------------------------------------------------------------------------ |
+| 1   | Local packet simulation (normal traffic + three attack scenarios)                          |
+| 2   | Rule engine: source/destination IP and port, protocol, ALLOW/BLOCK, priority, default DENY |
+| 3   | Attack detection: port scan, brute force, traffic flood                                    |
+| 4   | Automatic alert generation with optional automatic IP blocking                             |
+| 5   | IP whitelist and blacklist                                                                 |
+| 6   | PostgreSQL storage for traffic logs, rules, alerts and IP lists                            |
+| 7   | Seven-tab Tkinter GUI                                                                      |
+| 8   | Live dashboard with Matplotlib charts                                                      |
+| 9   | CSV export of traffic logs and security alerts                                             |
 
 ---
 
 ## Requirements
 
-* Python 3.9 or newer
-* Tkinter (bundled with Python on Windows/macOS; on Ubuntu run `sudo apt install python3-tk`)
-* **PostgreSQL 12 or newer**, running locally
-* Matplotlib and psycopg2 (installed by `requirements.txt`)
+- Python 3.9 or newer
+- Tkinter (bundled with Python on Windows/macOS; on Ubuntu run `sudo apt install python3-tk`)
+- **PostgreSQL 12 or newer**, running locally
+- Matplotlib and psycopg2 (installed by `requirements.txt`)
 
 ### 1. Install PostgreSQL
 
@@ -98,7 +98,7 @@ python src/main.py
 
 ---
 
-## Quick demo (what to show in a viva)
+## Quick demo
 
 1. Click **Start simulation**. Normal traffic begins flowing.
 2. Open **Traffic Monitor** — green rows were allowed, red rows were blocked.
@@ -124,7 +124,6 @@ mini-firewall-simulator/
 ├── data/                          # CSV exports (created at runtime)
 ├── docs/
 │   ├── ARCHITECTURE.md            # module-by-module explanation
-│   └── VIVA_NOTES.md              # likely questions and answers
 └── src/
     ├── main.py                    # entry point
     ├── config.py                  # paths, constants, default settings
@@ -187,11 +186,11 @@ mini-firewall-simulator/
 
 ## Detection rules
 
-| Attack | Condition | Fires on |
-|--------|-----------|----------|
-| `PORT_SCAN` | ≥ 10 unique destination ports from one IP within 10 s | the 10th unique port |
-| `BRUTE_FORCE` | ≥ 5 failed login attempts from one IP within 60 s | the 5th failed attempt |
-| `TRAFFIC_FLOOD` | ≥ 100 packets from one IP within 5 s | the 100th packet |
+| Attack          | Condition                                             | Fires on               |
+| --------------- | ----------------------------------------------------- | ---------------------- |
+| `PORT_SCAN`     | ≥ 10 unique destination ports from one IP within 10 s | the 10th unique port   |
+| `BRUTE_FORCE`   | ≥ 5 failed login attempts from one IP within 60 s     | the 5th failed attempt |
+| `TRAFFIC_FLOOD` | ≥ 100 packets from one IP within 5 s                  | the 100th packet       |
 
 All six numbers are editable in the **Settings** tab.
 
@@ -202,13 +201,13 @@ alert on every following packet while its window stays full.
 
 ## Firewall rule syntax
 
-| Field | Accepted values | Examples |
-|-------|-----------------|----------|
-| IP | `*`, exact, wildcard suffix, CIDR | `*`, `192.168.1.10`, `192.168.1.*`, `10.0.0.0/8` |
-| Port | `*`, exact, range | `*`, `443`, `20-25` |
-| Protocol | `*`, `TCP`, `UDP` | `TCP` |
-| Action | `ALLOW`, `BLOCK` | `BLOCK` |
-| Priority | any integer, **lower is checked first** | `10` |
+| Field    | Accepted values                         | Examples                                         |
+| -------- | --------------------------------------- | ------------------------------------------------ |
+| IP       | `*`, exact, wildcard suffix, CIDR       | `*`, `192.168.1.10`, `192.168.1.*`, `10.0.0.0/8` |
+| Port     | `*`, exact, range                       | `*`, `443`, `20-25`                              |
+| Protocol | `*`, `TCP`, `UDP`                       | `TCP`                                            |
+| Action   | `ALLOW`, `BLOCK`                        | `BLOCK`                                          |
+| Priority | any integer, **lower is checked first** | `10`                                             |
 
 The first rule that matches wins. If no rule matches, the default policy applies,
 which is **DENY**.
@@ -217,13 +216,13 @@ which is **DENY**.
 
 ## Database tables
 
-| Table | Purpose |
-|-------|---------|
-| `traffic_logs` | every processed packet with its verdict |
-| `firewall_rules` | the rule set |
-| `security_alerts` | detected attacks |
-| `ip_lists` | blacklist and whitelist entries |
-| `settings` | policy, thresholds, simulation speed |
+| Table             | Purpose                                 |
+| ----------------- | --------------------------------------- |
+| `traffic_logs`    | every processed packet with its verdict |
+| `firewall_rules`  | the rule set                            |
+| `security_alerts` | detected attacks                        |
+| `ip_lists`        | blacklist and whitelist entries         |
+| `settings`        | policy, thresholds, simulation speed    |
 
 Connections are handed out by a `ThreadedConnectionPool`, because the GUI thread
 and the traffic simulator thread both query the database.
@@ -236,23 +235,23 @@ contains SQL.
 
 ## Troubleshooting
 
-| Symptom | Fix |
-|---------|-----|
-| `Could not connect to PostgreSQL` | Is the service running? `sudo systemctl status postgresql` |
-| `database "firewall_db" does not exist` | Run `python src/database/setup_db.py` |
-| `password authentication failed` | Check `DB_USER` / `DB_PASSWORD` in `.env` |
-| `ModuleNotFoundError: psycopg2` | `pip install -r requirements.txt` |
-| Want a clean slate | `python src/database/setup_db.py --reset` |
+| Symptom                                 | Fix                                                        |
+| --------------------------------------- | ---------------------------------------------------------- |
+| `Could not connect to PostgreSQL`       | Is the service running? `sudo systemctl status postgresql` |
+| `database "firewall_db" does not exist` | Run `python src/database/setup_db.py`                      |
+| `password authentication failed`        | Check `DB_USER` / `DB_PASSWORD` in `.env`                  |
+| `ModuleNotFoundError: psycopg2`         | `pip install -r requirements.txt`                          |
+| Want a clean slate                      | `python src/database/setup_db.py --reset`                  |
 
 ---
 
 ## Known limitations
 
-* Traffic is simulated, so results do not reflect real network conditions.
-* Detection is threshold-based only; there is no machine learning component.
-* Rules are matched in Python, which is fine for a few hundred packets per
+- Traffic is simulated, so results do not reflect real network conditions.
+- Detection is threshold-based only; there is no machine learning component.
+- Rules are matched in Python, which is fine for a few hundred packets per
   second but not for real line-rate traffic.
-* IP lists are exact-match only; CIDR ranges are supported in rules, not in the
+- IP lists are exact-match only; CIDR ranges are supported in rules, not in the
   blacklist.
 
 ## Author
