@@ -1,0 +1,14 @@
+# Mini Firewall Simulator - dependencies
+#
+# Tkinter ships with Python. On Ubuntu/Debian it may need:
+#     sudo apt install python3-tk
+
+matplotlib>=3.7
+
+# PostgreSQL driver. The -binary package includes the compiled libpq,
+# so no system build tools are required.
+psycopg2-binary>=2.9
+
+# Optional: lets the app read database credentials from a .env file.
+# Remove this line if you prefer to export environment variables instead.
+python-dotenv>=1.0
