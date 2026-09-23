@@ -143,7 +143,12 @@ class AttackDetector:
                     ))
 
             # ---------------------------------------------- STEALTH SCAN
-            if packet.kind == config.KIND_STEALTH or packet.conn_state == config.CONN_INVALID:
+            flags_clean = (packet.flags or "").upper().replace(" ", "")
+            is_stealth_flag = (
+                flags_clean in ("FIN", "FIN,PSH,URG", "SYN,FIN")
+                or (packet.protocol.upper() == "TCP" and not flags_clean and packet.kind != config.KIND_NORMAL)
+            )
+            if packet.kind == config.KIND_STEALTH or is_stealth_flag:
                 stealth = self._stealth_pkts[ip]
                 stealth.append(now)
                 self._prune(stealth, now - 10)
@@ -154,7 +159,7 @@ class AttackDetector:
                             source_ip=ip,
                             severity="HIGH",
                             timestamp=now,
-                            details=(f"{len(stealth)} INVALID/stealth packets "
+                            details=(f"{len(stealth)} stealth scan packets (flags: {packet.flags or 'NULL'}) "
                                      f"in 10s (evasion attempt)"),
                         ))
 

@@ -71,6 +71,7 @@ class TrafficSimulator:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=2)
         self._thread = None
+        self._normal_sessions.clear()
 
     def set_speed(self, pps):
         self.speed = max(1, int(pps))
@@ -126,19 +127,25 @@ class TrafficSimulator:
 
             # 2. Normal background traffic
             if self.normal_enabled:
-                self._emit(self._make_normal_packet())
+                pkt, sess = self._make_normal_packet()
+                self._emit(pkt, sess)
                 time.sleep(1.0 / self.speed)
             else:
                 time.sleep(0.05)
 
-    def _emit(self, packet):
+    def _emit(self, packet, sess=None):
         try:
             self.on_packet(packet)
+            # If the firewall blocked this connection attempt, remove the session
+            # so the client doesn't send orphan ACK/data packets
+            if sess is not None and packet.action == "BLOCK":
+                if sess in self._normal_sessions:
+                    self._normal_sessions.remove(sess)
         except Exception as exc:                      # never kill the thread
             print(f"[simulator] packet handler error: {exc}")
 
     # ------------------------------------------------------------------ generators
-    def _make_normal_packet(self) -> Packet:
+    def _make_normal_packet(self) -> tuple:
         """Stateful ordinary traffic: 3-way handshakes, data streams, occasional UDP/auth."""
         # 15% UDP traffic (DNS)
         if random.random() < 0.15:
@@ -147,7 +154,7 @@ class TrafficSimulator:
             return Packet(src_ip=src, dst_ip=dst,
                           src_port=random.randint(1024, 65535), dst_port=53,
                           protocol="UDP", flags="", kind=config.KIND_NORMAL,
-                          size=random.randint(64, 512))
+                          size=random.randint(64, 512)), None
 
         # TCP traffic with handshake progression
         if self._normal_sessions and random.random() > 0.30:
@@ -158,21 +165,22 @@ class TrafficSimulator:
                 return Packet(src_ip=sess["src"], dst_ip=sess["dst"],
                               src_port=sess["sport"], dst_port=sess["dport"],
                               protocol="TCP", flags="ACK", kind=config.KIND_NORMAL,
-                              size=64)
+                              size=64), sess
             elif sess["stage"] == "ESTABLISHED":
                 sess["remaining"] -= 1
                 if sess["remaining"] <= 0:
-                    self._normal_sessions.remove(sess)
+                    if sess in self._normal_sessions:
+                        self._normal_sessions.remove(sess)
                     return Packet(src_ip=sess["src"], dst_ip=sess["dst"],
                                   src_port=sess["sport"], dst_port=sess["dport"],
                                   protocol="TCP", flags="FIN,ACK", kind=config.KIND_NORMAL,
-                                  size=64)
+                                  size=64), sess
                 else:
                     kind = config.KIND_AUTH if sess["is_auth"] else config.KIND_NORMAL
                     return Packet(src_ip=sess["src"], dst_ip=sess["dst"],
                                   src_port=sess["sport"], dst_port=sess["dport"],
                                   protocol="TCP", flags="PSH,ACK", kind=kind,
-                                  auth_success=True, size=random.randint(128, 1460))
+                                  auth_success=True, size=random.randint(128, 1460)), sess
 
         # Start a new TCP connection (SYN packet)
         src = random.choice(NORMAL_SOURCES + EXTERNAL_SOURCES[:2])
@@ -196,9 +204,10 @@ class TrafficSimulator:
             self._normal_sessions.append(sess)
 
         kind = config.KIND_AUTH if is_auth else config.KIND_NORMAL
-        return Packet(src_ip=src, dst_ip=dst, src_port=sport, dst_port=dst_port,
-                      protocol="TCP", flags="SYN", kind=kind,
-                      size=64)
+        pkt = Packet(src_ip=src, dst_ip=dst, src_port=sport, dst_port=dst_port,
+                     protocol="TCP", flags="SYN", kind=kind,
+                     size=64)
+        return pkt, sess
 
     def _run_port_scan(self, src_ip, port_count, delay):
         """Standard TCP SYN port scan."""
