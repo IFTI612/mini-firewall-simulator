@@ -14,6 +14,7 @@ from tkinter import ttk, messagebox
 import config
 from controller import Controller
 from ui import theme
+from ui.conntrack_tab import ConntrackTab
 from ui.dashboard import DashboardTab
 from ui.detection_tab import DetectionTab
 from ui.ip_tab import IPManagementTab
@@ -72,6 +73,7 @@ class FirewallApp(tk.Tk):
 
         self.tab_dashboard = DashboardTab(self.notebook, self.controller)
         self.tab_traffic = TrafficMonitorTab(self.notebook, self.controller)
+        self.tab_conntrack = ConntrackTab(self.notebook, self.controller)
         self.tab_rules = RulesTab(self.notebook, self.controller, on_change=refresh)
         self.tab_detection = DetectionTab(self.notebook, self.controller,
                                           on_change=refresh)
@@ -82,6 +84,7 @@ class FirewallApp(tk.Tk):
 
         self.notebook.add(self.tab_dashboard, text="Dashboard")
         self.notebook.add(self.tab_traffic, text="Traffic Monitor")
+        self.notebook.add(self.tab_conntrack, text="Connection Tracking")
         self.notebook.add(self.tab_rules, text="Firewall Rules")
         self.notebook.add(self.tab_detection, text="Attack Detection")
         self.notebook.add(self.tab_ip, text="IP Management")

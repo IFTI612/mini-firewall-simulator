@@ -10,8 +10,8 @@ import config
 from ui import theme
 
 COLUMNS = ["Time", "Source IP", "SPort", "Destination IP", "DPort",
-           "Proto", "Type", "Action", "Reason"]
-WIDTHS = [75, 120, 60, 130, 60, 55, 70, 70, 260]
+           "Proto", "Flags", "State", "Type", "Action", "Reason"]
+WIDTHS = [70, 110, 55, 120, 55, 50, 70, 85, 65, 65, 230]
 
 
 class TrafficMonitorTab(ttk.Frame):

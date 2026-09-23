@@ -27,6 +27,10 @@ class Packet:
     size: int = 512                 # bytes
     timestamp: float = field(default_factory=time.time)
 
+    # --- stateful inspection fields ---
+    flags: str = ""                 # TCP flags: SYN, SYN,ACK, ACK, PSH,ACK, FIN, RST
+    conn_state: str = ""            # NEW, ESTABLISHED, RELATED, INVALID, CLOSED
+
     # --- filled in by the firewall pipeline ---
     action: str = ""                # ALLOW / BLOCK
     reason: str = ""                # why that decision was taken
@@ -48,8 +52,10 @@ class Packet:
         return self.kind == KIND_AUTH and not self.auth_success
 
     def summary(self) -> str:
+        flags_str = f" [{self.flags}]" if self.flags else ""
+        state_str = f" ({self.conn_state})" if self.conn_state else ""
         return (f"{self.src_ip}:{self.src_port} -> "
-                f"{self.dst_ip}:{self.dst_port} ({self.protocol})")
+                f"{self.dst_ip}:{self.dst_port} ({self.protocol}{flags_str}){state_str}")
 
     def as_row(self) -> tuple:
         """Tuple used by the Traffic Monitor table."""
@@ -60,6 +66,8 @@ class Packet:
             self.dst_ip,
             self.dst_port,
             self.protocol,
+            self.flags or "-",
+            self.conn_state or "-",
             self.kind,
             self.action,
             self.reason,

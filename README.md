@@ -16,14 +16,14 @@ patterns. Built with **Python + Tkinter + PostgreSQL + Matplotlib**.
 
 | #   | Feature                                                                                    |
 | --- | ------------------------------------------------------------------------------------------ |
-| 1   | Local packet simulation (normal traffic + three attack scenarios)                          |
-| 2   | Rule engine: source/destination IP and port, protocol, ALLOW/BLOCK, priority, default DENY |
-| 3   | Attack detection: port scan, brute force, traffic flood                                    |
+| 1   | Local packet simulation (stateful TCP conversations + 4 attack scenarios)                  |
+| 2   | Stateful Inspection: RFC 793 TCP Conntrack, 3-way handshakes, fast-path, default DENY     |
+| 3   | Attack detection: port scan, brute force, traffic flood, stealth scans (FIN/Xmas/NULL)     |
 | 4   | Automatic alert generation with optional automatic IP blocking                             |
 | 5   | IP whitelist and blacklist                                                                 |
 | 6   | PostgreSQL storage for traffic logs, rules, alerts and IP lists                            |
-| 7   | Seven-tab Tkinter GUI                                                                      |
-| 8   | Live dashboard with Matplotlib charts                                                      |
+| 7   | Eight-tab Tkinter GUI with dedicated Live Connection Tracking tab                         |
+| 8   | Live dashboard with active connection counters and Matplotlib charts                      |
 | 9   | CSV export of traffic logs and security alerts                                             |
 
 ---

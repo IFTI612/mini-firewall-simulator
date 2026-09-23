@@ -42,11 +42,12 @@ class DashboardTab(ttk.Frame):
         self.card_blocked = theme.StatCard(row, "Blocked", color=theme.RED)
         self.card_attacks = theme.StatCard(row, "Attacks detected", color=theme.ORANGE)
         self.card_black = theme.StatCard(row, "Blacklisted IPs", color=theme.PURPLE)
+        self.card_conns = theme.StatCard(row, "Active conns", color="#0284c7")
 
         for i, card in enumerate([self.card_total, self.card_allowed,
                                   self.card_blocked, self.card_attacks,
-                                  self.card_black]):
-            card.grid(row=0, column=i, padx=6, sticky="nsew")
+                                  self.card_black, self.card_conns]):
+            card.grid(row=0, column=i, padx=4, sticky="nsew")
             row.columnconfigure(i, weight=1)
 
     def _build_charts(self):
@@ -99,15 +100,16 @@ class DashboardTab(ttk.Frame):
 
     def _draw_attacks(self):
         counts = self.controller.db.get_attack_counts()
-        labels = ["Port\nscan", "Brute\nforce", "Traffic\nflood"]
+        labels = ["Port\nscan", "Brute\nforce", "Traffic\nflood", "Stealth\nscan"]
         values = [counts.get(config.PORT_SCAN, 0),
                   counts.get(config.BRUTE_FORCE, 0),
-                  counts.get(config.TRAFFIC_FLOOD, 0)]
+                  counts.get(config.TRAFFIC_FLOOD, 0),
+                  counts.get(config.STEALTH_SCAN, 0)]
 
         ax = self.ax_attacks
         ax.clear()
         bars = ax.bar(labels, values,
-                      color=[theme.ORANGE, theme.PURPLE, theme.RED], width=0.55)
+                      color=[theme.ORANGE, theme.PURPLE, theme.RED, "#0284c7"], width=0.55)
         for bar, value in zip(bars, values):
             ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
                     str(value), ha="center", va="bottom", fontsize=9)
@@ -128,6 +130,7 @@ class DashboardTab(ttk.Frame):
         self.card_blocked.set(now["blocked"])
         self.card_attacks.set(now["attacks"])
         self.card_black.set(now["blacklisted"])
+        self.card_conns.set(now.get("active_conns", 0))
 
         # packets in the last second = difference from the previous sample
         self.history_allowed.append(max(0, now["allowed"] - self._last["allowed"]))

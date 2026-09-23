@@ -98,6 +98,8 @@ class DatabaseManager:
             script = f.read()
         with self._cursor(commit=True) as cur:
             cur.execute(script)
+            cur.execute("ALTER TABLE traffic_logs ADD COLUMN IF NOT EXISTS flags TEXT DEFAULT ''")
+            cur.execute("ALTER TABLE traffic_logs ADD COLUMN IF NOT EXISTS conn_state TEXT DEFAULT ''")
 
     def close(self):
         if self.pool and not self.pool.closed:
@@ -188,11 +190,12 @@ class DatabaseManager:
     def log_packet(self, packet) -> int:
         return self._execute(
             "INSERT INTO traffic_logs "
-            "(ts, ts_text, src_ip, src_port, dst_ip, dst_port, protocol, kind, action, reason, rule_id, size) "
-            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+            "(ts, ts_text, src_ip, src_port, dst_ip, dst_port, protocol, kind, action, reason, rule_id, size, flags, conn_state) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
             (packet.timestamp, packet.datetime_text, packet.src_ip, packet.src_port,
              packet.dst_ip, packet.dst_port, packet.protocol, packet.kind,
-             packet.action, packet.reason, packet.rule_id, packet.size),
+             packet.action, packet.reason, packet.rule_id, packet.size,
+             getattr(packet, "flags", ""), getattr(packet, "conn_state", "")),
         )
 
     def get_logs(self, limit=200, action=None, src_ip=None, protocol=None, kind=None):
@@ -307,12 +310,12 @@ class DatabaseManager:
         """Write traffic logs to a CSV file. Returns the number of rows."""
         rows = self.get_logs(limit=limit, **filters)
         headers = ["id", "ts_text", "src_ip", "src_port", "dst_ip", "dst_port",
-                   "protocol", "kind", "action", "reason", "rule_id", "size"]
+                   "protocol", "flags", "conn_state", "kind", "action", "reason", "rule_id", "size"]
         with open(path, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(headers)
             for r in rows:
-                writer.writerow([r[h] for h in headers])
+                writer.writerow([r.get(h, "") for h in headers])
         return len(rows)
 
     def export_alerts_csv(self, path: str, limit=100000) -> int:

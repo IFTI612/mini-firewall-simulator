@@ -75,17 +75,27 @@ every packet with an SQL query would be slow. So `IPListManager` keeps both
 lists as Python `set` objects in memory and refreshes them from the database
 whenever they change. A set lookup is O(1).
 
+### `firewall/conntrack.py`
+
+Stateful Connection Tracking (Conntrack) engine implementing RFC 793 TCP state machine:
+- Tracks connections in memory using a bidirectional flow key `(src_ip, src_port, dst_ip, dst_port, proto)`.
+- Enforces valid 3-way handshakes (`SYN` -> `SYN-ACK` -> `ACK`).
+- Flags stealth scans (`FIN` scan, `Xmas` scan, `NULL` scan) and unsolicited `ACK`/data packets as `INVALID`.
+- Fast-paths `ESTABLISHED` and `RELATED` traffic without re-evaluating rules.
+- Manages TCP and UDP session timeouts and connection teardown (`FIN`, `RST`).
+
 ### `firewall/rule_engine.py`
 
-`evaluate(packet)` returns a `Decision` object. The order is fixed:
+`evaluate(packet)` returns a `Decision` object. The stateful decision order:
 
-1. **Whitelist** — trusted IPs are allowed immediately and are never
-   auto-blocked.
+1. **Whitelist** — trusted IPs are allowed immediately and are never auto-blocked.
 2. **Blacklist** — banned IPs are blocked before any rule is examined.
-3. **Rules** — the rule list is already sorted by priority when it comes out of
-   the database, so a simple `for` loop with an early `return` gives
-   "first match wins".
-4. **Default policy** — DENY.
+3. **Stateful Inspection (Conntrack)**:
+   - `INVALID` -> blocked immediately (drops stealth scans, unsolicited ACKs).
+   - `ESTABLISHED` -> fast-pathed / allowed immediately.
+   - `NEW` -> proceeds to rule evaluation below.
+4. **Rules** — evaluated for new connection attempts (first match wins). If allowed, the connection is confirmed in Conntrack; if blocked, dropped.
+5. **Default policy** — DENY.
 
 ### `detection/detector.py`
 

@@ -60,6 +60,8 @@ class DetectionTab(ttk.Frame):
                    command=self.launch_brute).pack(side="left", padx=3)
         ttk.Button(btns, text="Launch traffic flood", style="Accent.TButton",
                    command=self.launch_flood).pack(side="left", padx=3)
+        ttk.Button(btns, text="Launch stealth scan", style="Accent.TButton",
+                   command=self.launch_stealth).pack(side="left", padx=3)
 
         opts = ttk.Frame(sim_box)
         opts.pack(fill="x", pady=(12, 0))
@@ -98,6 +100,9 @@ class DetectionTab(ttk.Frame):
             f"TRAFFIC_FLOOD\n"
             f"  >= {db.get_int_setting('flood_threshold', 100)} packets from one IP\n"
             f"     within {db.get_int_setting('flood_window', 5)} seconds\n\n"
+            f"STEALTH_SCAN (Stateful Conntrack)\n"
+            f"  >= 5 invalid TCP flags (FIN/Xmas/NULL) without handshake\n"
+            f"     within 10 seconds\n\n"
             f"Alert cooldown per IP: "
             f"{db.get_int_setting('alert_cooldown', 15)} s"
         ))
@@ -137,6 +142,10 @@ class DetectionTab(ttk.Frame):
     def launch_flood(self):
         if self._require_running():
             self.controller.simulator.launch_flood(self._ip_or_none())
+
+    def launch_stealth(self):
+        if self._require_running():
+            self.controller.simulator.launch_stealth_scan(self._ip_or_none(), scan_type="FIN")
 
     # ------------------------------------------------------------------
     def save_auto_block(self):

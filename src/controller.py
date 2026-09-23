@@ -103,11 +103,18 @@ class Controller:
                 "blocked": self.blocked,
                 "attacks": self.attacks,
                 "blacklisted": self.ip_lists.blacklist_size(),
+                "active_conns": self.rule_engine.conntrack.active_count(),
             }
 
     def reset_counters(self):
         with self._stat_lock:
             self.total = self.allowed = self.blocked = self.attacks = 0
+
+    def get_active_connections(self):
+        return self.rule_engine.conntrack.active_connections()
+
+    def flush_connections(self):
+        self.rule_engine.conntrack.flush()
 
     # ------------------------------------------------------------------ control
     def start(self):
@@ -127,6 +134,7 @@ class Controller:
     def clear_data(self):
         self.db.clear_all()
         self.detector.reset()
+        self.rule_engine.conntrack.flush()
         self.reset_counters()
 
     def shutdown(self):

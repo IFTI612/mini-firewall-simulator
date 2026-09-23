@@ -49,6 +49,7 @@ class TrafficSimulator:
         self._jobs = queue.Queue()        # queued attack scenarios
         self.speed = 20                   # normal packets per second
         self.normal_enabled = True
+        self._normal_sessions = []
 
     # ------------------------------------------------------------------ control
     @property
@@ -97,6 +98,14 @@ class TrafficSimulator:
             "delay": delay,
         }))
 
+    def launch_stealth_scan(self, src_ip=None, scan_type="FIN", port_count=20, delay=0.03):
+        self._jobs.put(("STEALTH_SCAN", {
+            "src_ip": src_ip or random.choice(EXTERNAL_SOURCES),
+            "scan_type": scan_type,
+            "port_count": int(port_count),
+            "delay": delay,
+        }))
+
     # ------------------------------------------------------------------ main loop
     def _loop(self):
         while self._running.is_set():
@@ -112,6 +121,8 @@ class TrafficSimulator:
                 self._run_brute_force(**params)
             elif job == "TRAFFIC_FLOOD":
                 self._run_flood(**params)
+            elif job == "STEALTH_SCAN":
+                self._run_stealth_scan(**params)
 
             # 2. Normal background traffic
             if self.normal_enabled:
@@ -128,29 +139,71 @@ class TrafficSimulator:
 
     # ------------------------------------------------------------------ generators
     def _make_normal_packet(self) -> Packet:
-        """Ordinary looking traffic: web, DNS, mail, an occasional login."""
+        """Stateful ordinary traffic: 3-way handshakes, data streams, occasional UDP/auth."""
+        # 15% UDP traffic (DNS)
+        if random.random() < 0.15:
+            src = random.choice(NORMAL_SOURCES)
+            dst = random.choice(SERVERS)
+            return Packet(src_ip=src, dst_ip=dst,
+                          src_port=random.randint(1024, 65535), dst_port=53,
+                          protocol="UDP", flags="", kind=config.KIND_NORMAL,
+                          size=random.randint(64, 512))
+
+        # TCP traffic with handshake progression
+        if self._normal_sessions and random.random() > 0.30:
+            sess = random.choice(self._normal_sessions)
+            if sess["stage"] == "SYN":
+                sess["stage"] = "ESTABLISHED"
+                # Client completes handshake
+                return Packet(src_ip=sess["src"], dst_ip=sess["dst"],
+                              src_port=sess["sport"], dst_port=sess["dport"],
+                              protocol="TCP", flags="ACK", kind=config.KIND_NORMAL,
+                              size=64)
+            elif sess["stage"] == "ESTABLISHED":
+                sess["remaining"] -= 1
+                if sess["remaining"] <= 0:
+                    self._normal_sessions.remove(sess)
+                    return Packet(src_ip=sess["src"], dst_ip=sess["dst"],
+                                  src_port=sess["sport"], dst_port=sess["dport"],
+                                  protocol="TCP", flags="FIN,ACK", kind=config.KIND_NORMAL,
+                                  size=64)
+                else:
+                    kind = config.KIND_AUTH if sess["is_auth"] else config.KIND_NORMAL
+                    return Packet(src_ip=sess["src"], dst_ip=sess["dst"],
+                                  src_port=sess["sport"], dst_port=sess["dport"],
+                                  protocol="TCP", flags="PSH,ACK", kind=kind,
+                                  auth_success=True, size=random.randint(128, 1460))
+
+        # Start a new TCP connection (SYN packet)
         src = random.choice(NORMAL_SOURCES + EXTERNAL_SOURCES[:2])
         dst = random.choice(SERVERS)
         dst_port = random.choices(COMMON_PORTS, weights=PORT_WEIGHTS, k=1)[0]
-        protocol = "UDP" if dst_port == 53 else "TCP"
+        if dst_port == 53:
+            dst_port = 80
+        sport = random.randint(1024, 65535)
+        is_auth = (dst_port == 22)
 
-        # roughly 1 in 12 normal packets is a successful login
-        if random.random() < 0.08:
-            return Packet(src_ip=src, dst_ip=dst,
-                          src_port=random.randint(1024, 65535), dst_port=22,
-                          protocol="TCP", kind=config.KIND_AUTH,
-                          auth_success=True, size=random.randint(64, 512))
+        sess = {
+            "src": src,
+            "dst": dst,
+            "sport": sport,
+            "dport": dst_port,
+            "stage": "SYN",
+            "remaining": random.randint(2, 6),
+            "is_auth": is_auth,
+        }
+        if len(self._normal_sessions) < 50:
+            self._normal_sessions.append(sess)
 
-        return Packet(src_ip=src, dst_ip=dst,
-                      src_port=random.randint(1024, 65535), dst_port=dst_port,
-                      protocol=protocol, kind=config.KIND_NORMAL,
-                      size=random.randint(64, 1500))
+        kind = config.KIND_AUTH if is_auth else config.KIND_NORMAL
+        return Packet(src_ip=src, dst_ip=dst, src_port=sport, dst_port=dst_port,
+                      protocol="TCP", flags="SYN", kind=kind,
+                      size=64)
 
     def _run_port_scan(self, src_ip, port_count, delay):
-        """One IP touching many different destination ports quickly."""
+        """Standard TCP SYN port scan."""
         dst = random.choice(SERVERS)
         ports = random.sample(SCAN_PORTS, min(port_count, len(SCAN_PORTS)))
-        # if more ports are requested than the well-known list holds, top up
         while len(ports) < port_count:
             extra = random.randint(1, 10000)
             if extra not in ports:
@@ -161,25 +214,32 @@ class TrafficSimulator:
                 return
             self._emit(Packet(src_ip=src_ip, dst_ip=dst,
                               src_port=random.randint(1024, 65535), dst_port=port,
-                              protocol="TCP", kind=config.KIND_SCAN, size=64))
+                              protocol="TCP", flags="SYN", kind=config.KIND_SCAN, size=64))
             time.sleep(delay)
 
     def _run_brute_force(self, src_ip, attempts, port, delay):
         """Repeated failed logins against one service port."""
         dst = random.choice(SERVERS)
+        sport = random.randint(1024, 65535)
+        # Initiating SYN
+        self._emit(Packet(src_ip=src_ip, dst_ip=dst,
+                          src_port=sport, dst_port=port,
+                          protocol="TCP", flags="SYN", kind=config.KIND_AUTH,
+                          auth_success=False, size=64))
+        time.sleep(delay)
+
         for i in range(attempts):
             if not self._running.is_set():
                 return
-            # last attempt occasionally "succeeds" — makes the demo realistic
             success = (i == attempts - 1) and random.random() < 0.2
             self._emit(Packet(src_ip=src_ip, dst_ip=dst,
-                              src_port=random.randint(1024, 65535), dst_port=port,
-                              protocol="TCP", kind=config.KIND_AUTH,
+                              src_port=sport, dst_port=port,
+                              protocol="TCP", flags="PSH,ACK", kind=config.KIND_AUTH,
                               auth_success=success, size=128))
             time.sleep(delay)
 
     def _run_flood(self, src_ip, packet_count, delay):
-        """A very high packet rate from a single IP (DoS style)."""
+        """A very high packet rate from a single IP (SYN Flood)."""
         dst = random.choice(SERVERS)
         dst_port = random.choice([80, 443])
         for _ in range(packet_count):
@@ -187,6 +247,26 @@ class TrafficSimulator:
                 return
             self._emit(Packet(src_ip=src_ip, dst_ip=dst,
                               src_port=random.randint(1024, 65535),
-                              dst_port=dst_port, protocol="TCP",
-                              kind=config.KIND_FLOOD, size=1500))
+                              dst_port=dst_port, protocol="TCP", flags="SYN",
+                              kind=config.KIND_FLOOD, size=64))
+            time.sleep(delay)
+
+    def _run_stealth_scan(self, src_ip, scan_type, port_count, delay):
+        """Evasion scan: FIN, Xmas, or NULL scan to bypass stateless filters."""
+        dst = random.choice(SERVERS)
+        ports = random.sample(SCAN_PORTS, min(port_count, len(SCAN_PORTS)))
+        flags_map = {
+            "FIN": "FIN",
+            "XMAS": "FIN,PSH,URG",
+            "NULL": "",
+            "SYN_FIN": "SYN,FIN"
+        }
+        flags = flags_map.get(scan_type.upper(), "FIN")
+        for port in ports:
+            if not self._running.is_set():
+                return
+            self._emit(Packet(src_ip=src_ip, dst_ip=dst,
+                              src_port=random.randint(1024, 65535), dst_port=port,
+                              protocol="TCP", flags=flags,
+                              kind=config.KIND_STEALTH, size=64))
             time.sleep(delay)

@@ -11,8 +11,8 @@ import config
 from ui import theme
 
 COLUMNS = ["ID", "Timestamp", "Source IP", "SPort", "Destination IP", "DPort",
-           "Proto", "Type", "Action", "Reason"]
-WIDTHS = [50, 145, 120, 60, 130, 60, 55, 70, 65, 250]
+           "Proto", "Flags", "State", "Type", "Action", "Reason"]
+WIDTHS = [45, 140, 110, 55, 120, 55, 50, 65, 80, 65, 60, 230]
 
 
 class LogsTab(ttk.Frame):
@@ -98,7 +98,8 @@ class LogsTab(ttk.Frame):
             tag = "allow" if r["action"] == "ALLOW" else "block"
             self.tree.insert("", "end", values=(
                 r["id"], r["ts_text"], r["src_ip"], r["src_port"], r["dst_ip"],
-                r["dst_port"], r["protocol"], r["kind"], r["action"],
+                r["dst_port"], r["protocol"], r.get("flags") or "-",
+                r.get("conn_state") or "-", r["kind"], r["action"],
                 r["reason"] or ""), tags=(tag,))
         self.status.config(text=f"{len(rows)} row(s) shown.")
 

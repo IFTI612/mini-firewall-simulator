@@ -17,6 +17,8 @@ NUMERIC_FIELDS = [
     ("bruteforce_window", "Brute force: window (s)"),
     ("flood_threshold", "Traffic flood: packets"),
     ("flood_window", "Traffic flood: window (s)"),
+    ("conntrack_tcp_timeout", "Conntrack: TCP timeout (s)"),
+    ("conntrack_udp_timeout", "Conntrack: UDP timeout (s)"),
     ("alert_cooldown", "Alert cooldown per IP (s)"),
     ("sim_speed", "Normal traffic (packets/second)"),
 ]
@@ -30,6 +32,7 @@ class SettingsTab(ttk.Frame):
 
         self.policy = tk.StringVar()
         self.auto_block = tk.IntVar()
+        self.stateful = tk.IntVar()
         self.fields = {key: tk.StringVar() for key, _ in NUMERIC_FIELDS}
 
         self._build()
@@ -51,9 +54,14 @@ class SettingsTab(ttk.Frame):
                   foreground=theme.MUTED).grid(row=0, column=2, sticky="w", padx=10)
 
         ttk.Checkbutton(policy_box,
+                        text="Enable Stateful Inspection (TCP Connection Tracking / Conntrack)",
+                        variable=self.stateful).grid(row=1, column=0, columnspan=3,
+                                                       sticky="w", pady=(8, 0))
+
+        ttk.Checkbutton(policy_box,
                         text="Automatically blacklist an IP when an attack is detected",
-                        variable=self.auto_block).grid(row=1, column=0, columnspan=3,
-                                                       sticky="w", pady=(10, 0))
+                        variable=self.auto_block).grid(row=2, column=0, columnspan=3,
+                                                       sticky="w", pady=(6, 0))
 
         det_box = ttk.LabelFrame(self, text="  Detection thresholds  ", padding=12)
         det_box.pack(fill="x", pady=(14, 0))
@@ -96,6 +104,7 @@ class SettingsTab(ttk.Frame):
         db = self.controller.db
         self.policy.set(db.get_setting("default_policy", "DENY"))
         self.auto_block.set(1 if db.get_bool_setting("auto_block") else 0)
+        self.stateful.set(1 if db.get_bool_setting("stateful_inspection") else 0)
         for key, _ in NUMERIC_FIELDS:
             self.fields[key].set(db.get_setting(key))
 
@@ -113,6 +122,7 @@ class SettingsTab(ttk.Frame):
         db = self.controller.db
         db.set_setting("default_policy", self.policy.get())
         db.set_setting("auto_block", self.auto_block.get())
+        db.set_setting("stateful_inspection", self.stateful.get())
         for key, value in values.items():
             db.set_setting(key, value)
 

@@ -36,6 +36,7 @@ class AttackDetector:
         self._ports = defaultdict(deque)        # deque of (timestamp, dst_port)
         self._auth_fails = defaultdict(deque)   # deque of timestamps
         self._packets = defaultdict(deque)      # deque of timestamps
+        self._stealth_pkts = defaultdict(deque) # deque of timestamps
 
         # last time we alerted for (ip, attack_type)
         self._last_alert = {}
@@ -60,6 +61,7 @@ class AttackDetector:
             self._ports.clear()
             self._auth_fails.clear()
             self._packets.clear()
+            self._stealth_pkts.clear()
             self._last_alert.clear()
 
     # ------------------------------------------------------------------
@@ -139,6 +141,22 @@ class AttackDetector:
                         details=(f"{len(pkts)} packets in {self.flood_window}s "
                                  f"(threshold {self.flood_threshold})"),
                     ))
+
+            # ---------------------------------------------- STEALTH SCAN
+            if packet.kind == config.KIND_STEALTH or packet.conn_state == config.CONN_INVALID:
+                stealth = self._stealth_pkts[ip]
+                stealth.append(now)
+                self._prune(stealth, now - 10)
+                if len(stealth) >= 5:
+                    if not self._on_cooldown(ip, config.STEALTH_SCAN, now):
+                        alerts.append(Alert(
+                            attack_type=config.STEALTH_SCAN,
+                            source_ip=ip,
+                            severity="HIGH",
+                            timestamp=now,
+                            details=(f"{len(stealth)} INVALID/stealth packets "
+                                     f"in 10s (evasion attempt)"),
+                        ))
 
         return alerts
 
