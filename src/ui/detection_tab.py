@@ -3,6 +3,7 @@ detection_tab.py
 Shows detection rules, lets you launch simulated attacks, and lists alerts.
 """
 
+import random
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -11,6 +12,19 @@ from ui import theme
 
 COLUMNS = ["Time", "Attack type", "Source IP", "Severity", "Auto-blocked", "Details"]
 WIDTHS = [75, 120, 130, 75, 100, 330]
+
+ATTACKER_IP_POOLS = [
+    lambda: f"203.0.113.{random.randint(2, 250)}",
+    lambda: f"198.51.100.{random.randint(2, 250)}",
+    lambda: f"192.0.2.{random.randint(2, 250)}",
+    lambda: f"45.77.{random.randint(10, 180)}.{random.randint(2, 250)}",
+    lambda: f"185.220.101.{random.randint(2, 250)}",
+    lambda: f"91.200.12.{random.randint(2, 250)}",
+]
+
+
+def generate_random_attacker_ip() -> str:
+    return random.choice(ATTACKER_IP_POOLS)()
 
 
 class DetectionTab(ttk.Frame):
@@ -49,8 +63,8 @@ class DetectionTab(ttk.Frame):
         row.pack(fill="x", pady=(0, 10))
         ttk.Label(row, text="Attacker IP:").pack(side="left")
         ttk.Entry(row, textvariable=self.attacker_ip, width=18).pack(side="left", padx=6)
-        ttk.Button(row, text="Random",
-                   command=lambda: self.attacker_ip.set("")).pack(side="left")
+        ttk.Button(row, text="🎲 Random IP",
+                   command=self.set_random_ip).pack(side="left")
 
         btns = ttk.Frame(sim_box)
         btns.pack(fill="x")
@@ -133,6 +147,15 @@ class DetectionTab(ttk.Frame):
         self.tree.insert("", 0, values=alert.as_row(), tags=("attack",))
 
     # ------------------------------------------------------------------
+    def set_random_ip(self):
+        curr = self.attacker_ip.get().strip()
+        for _ in range(10):
+            new_ip = generate_random_attacker_ip()
+            if new_ip != curr:
+                self.attacker_ip.set(new_ip)
+                return
+        self.attacker_ip.set(new_ip)
+
     def _ip_or_none(self):
         ip = self.attacker_ip.get().strip()
         return ip or None
