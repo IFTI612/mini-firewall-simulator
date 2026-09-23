@@ -14,6 +14,7 @@ import threading
 
 import config
 from firewall.conntrack import ConnectionTracker
+from firewall.dpi import DPISignatureEngine
 from firewall.ip_lists import IPListManager
 
 
@@ -34,18 +35,21 @@ class RuleEngine:
         self.db = db
         self.ip_lists = ip_lists
         self.conntrack = ConnectionTracker()
+        self.dpi = DPISignatureEngine()
         self._lock = threading.Lock()
         self._rules = []
         self.default_policy = "DENY"
         self.stateful_enabled = True
+        self.dpi_enabled = True
         self.reload()
 
     # ------------------------------------------------------------------
     def reload(self):
-        """Pull the rule set, default policy, and conntrack settings from the database."""
+        """Pull the rule set, default policy, conntrack, and DPI settings from the database."""
         rules = self.db.get_rules()          # already sorted by priority
         policy = self.db.get_setting("default_policy", "DENY")
         stateful = self.db.get_bool_setting("stateful_inspection")
+        dpi_on = self.db.get_bool_setting("dpi_enabled")
         tcp_timeout = self.db.get_int_setting("conntrack_tcp_timeout", 120)
         udp_timeout = self.db.get_int_setting("conntrack_udp_timeout", 30)
 
@@ -54,6 +58,7 @@ class RuleEngine:
             self._rules = rules
             self.default_policy = policy
             self.stateful_enabled = stateful
+            self.dpi_enabled = dpi_on
 
     def rules(self):
         with self._lock:
@@ -61,7 +66,7 @@ class RuleEngine:
 
     # ------------------------------------------------------------------
     def evaluate(self, packet) -> Decision:
-        """Apply the stateful decision chain to a packet."""
+        """Apply the stateful and DPI decision chain to a packet."""
 
         # 1. Whitelist wins over everything
         if self.ip_lists.is_whitelisted(packet.src_ip):
@@ -75,10 +80,20 @@ class RuleEngine:
 
         with self._lock:
             stateful = self.stateful_enabled
+            dpi_on = self.dpi_enabled
             rules = self._rules
             policy = self.default_policy
 
-        # 3. Stateful Inspection & Connection Tracking
+        # 3. Deep Packet Inspection (DPI / L7 Signatures)
+        if dpi_on and packet.payload:
+            match = self.dpi.inspect(packet)
+            if match:
+                packet.dpi_match = match
+                if stateful:
+                    self.conntrack.drop_connection(packet)
+                return Decision("BLOCK", f"DPI: {match.attack_type} blocked ({match.name})")
+
+        # 4. Stateful Inspection & Connection Tracking
         if stateful:
             conn_state, track_reason = self.conntrack.process_packet(packet)
             packet.conn_state = conn_state
@@ -86,15 +101,13 @@ class RuleEngine:
             # Drop INVALID packets (unsolicited ACKs, stealth scans, out-of-order data)
             if conn_state == config.CONN_INVALID:
                 return Decision("BLOCK", f"Stateful Conntrack: INVALID ({track_reason})")
-
-            # Fast-path for ESTABLISHED connections (already verified handshake)
-            if conn_state in (config.CONN_ESTABLISHED, config.CONN_RELATED):
-                flag_str = f" [{packet.flags}]" if packet.flags else ""
-                return Decision("ALLOW", f"Stateful Conntrack: ESTABLISHED flow{flag_str}")
-
-            # If NEW: fall through to rule check
         else:
             packet.conn_state = "STATELESS"
+
+        # 5. Fast-path for verified ESTABLISHED connections
+        if stateful and packet.conn_state in (config.CONN_ESTABLISHED, config.CONN_RELATED):
+            flag_str = f" [{packet.flags}]" if packet.flags else ""
+            return Decision("ALLOW", f"Stateful Conntrack: ESTABLISHED flow{flag_str}")
 
         # 4. First matching rule, by priority (for NEW connections or stateless mode)
         for rule in rules:

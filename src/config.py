@@ -67,7 +67,10 @@ PORT_SCAN = "PORT_SCAN"
 BRUTE_FORCE = "BRUTE_FORCE"
 TRAFFIC_FLOOD = "TRAFFIC_FLOOD"
 STEALTH_SCAN = "STEALTH_SCAN"
-ATTACK_TYPES = [PORT_SCAN, BRUTE_FORCE, TRAFFIC_FLOOD, STEALTH_SCAN]
+SQL_INJECTION = "SQL_INJECTION"
+XSS = "XSS"
+PATH_TRAVERSAL = "PATH_TRAVERSAL"
+ATTACK_TYPES = [PORT_SCAN, BRUTE_FORCE, TRAFFIC_FLOOD, STEALTH_SCAN, SQL_INJECTION, XSS, PATH_TRAVERSAL]
 
 # Packet "kind" — a simulation label, not a real protocol field
 KIND_NORMAL = "NORMAL"
@@ -75,6 +78,9 @@ KIND_AUTH = "AUTH"
 KIND_SCAN = "SCAN"
 KIND_FLOOD = "FLOOD"
 KIND_STEALTH = "STEALTH"
+KIND_SQLI = "SQLI"
+KIND_XSS = "XSS"
+KIND_TRAVERSAL = "TRAVERSAL"
 
 # Connection tracking states (RFC / Netfilter conntrack)
 CONN_NEW = "NEW"
@@ -89,6 +95,7 @@ CONN_CLOSED = "CLOSED"
 DEFAULT_SETTINGS = {
     "default_policy": "DENY",       # default DENY policy
     "auto_block": "1",              # 1 = auto-blacklist attacking IPs
+    "dpi_enabled": "1",             # 1 = Deep Packet Inspection enabled, 0 = disabled
 
     "stateful_inspection": "1",     # 1 = stateful connection tracking enabled, 0 = stateless
     "conntrack_tcp_timeout": "120", # seconds before idle TCP connection is expired

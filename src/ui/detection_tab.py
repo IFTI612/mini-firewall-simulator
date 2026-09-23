@@ -63,6 +63,15 @@ class DetectionTab(ttk.Frame):
         ttk.Button(btns, text="Launch stealth scan", style="Accent.TButton",
                    command=self.launch_stealth).pack(side="left", padx=3)
 
+        btns_l7 = ttk.Frame(sim_box)
+        btns_l7.pack(fill="x", pady=(6, 0))
+        ttk.Button(btns_l7, text="Launch SQLi", style="Accent.TButton",
+                   command=self.launch_sqli).pack(side="left", padx=3)
+        ttk.Button(btns_l7, text="Launch XSS", style="Accent.TButton",
+                   command=self.launch_xss).pack(side="left", padx=3)
+        ttk.Button(btns_l7, text="Launch Traversal", style="Accent.TButton",
+                   command=self.launch_traversal).pack(side="left", padx=3)
+
         opts = ttk.Frame(sim_box)
         opts.pack(fill="x", pady=(12, 0))
         ttk.Checkbutton(opts, text="Automatic IP blocking when an attack is detected",
@@ -88,6 +97,7 @@ class DetectionTab(ttk.Frame):
     # ------------------------------------------------------------------
     def refresh(self):
         db = self.controller.db
+        dpi_status = "ENABLED" if db.get_bool_setting("dpi_enabled", True) else "DISABLED"
         self.rules_text.config(text=(
             f"PORT_SCAN\n"
             f"  >= {db.get_int_setting('portscan_threshold', 10)} unique destination "
@@ -103,6 +113,10 @@ class DetectionTab(ttk.Frame):
             f"STEALTH_SCAN (Stateful Conntrack)\n"
             f"  >= 5 invalid TCP flags (FIN/Xmas/NULL) without handshake\n"
             f"     within 10 seconds\n\n"
+            f"DPI / L7 SIGNATURES ({dpi_status})\n"
+            f"  • SQL Injection: ' OR 1=1 --, UNION SELECT, stacked queries\n"
+            f"  • XSS: <script>, onerror=, onload=, javascript: URIs\n"
+            f"  • Path Traversal: ../../etc/passwd, ..\\windows\\system32\n\n"
             f"Alert cooldown per IP: "
             f"{db.get_int_setting('alert_cooldown', 15)} s"
         ))
@@ -146,6 +160,18 @@ class DetectionTab(ttk.Frame):
     def launch_stealth(self):
         if self._require_running():
             self.controller.simulator.launch_stealth_scan(self._ip_or_none(), scan_type="FIN")
+
+    def launch_sqli(self):
+        if self._require_running():
+            self.controller.simulator.launch_sqli_attack(self._ip_or_none())
+
+    def launch_xss(self):
+        if self._require_running():
+            self.controller.simulator.launch_xss_attack(self._ip_or_none())
+
+    def launch_traversal(self):
+        if self._require_running():
+            self.controller.simulator.launch_path_traversal_attack(self._ip_or_none())
 
     # ------------------------------------------------------------------
     def save_auto_block(self):

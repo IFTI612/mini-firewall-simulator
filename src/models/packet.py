@@ -8,6 +8,7 @@ simulator. Nothing here touches a real network interface.
 
 import time
 from dataclasses import dataclass, field
+from typing import Any, Optional
 
 from config import KIND_NORMAL
 
@@ -31,6 +32,10 @@ class Packet:
     flags: str = ""                 # TCP flags: SYN, SYN,ACK, ACK, PSH,ACK, FIN, RST
     conn_state: str = ""            # NEW, ESTABLISHED, RELATED, INVALID, CLOSED
 
+    # --- DPI (Deep Packet Inspection) fields ---
+    payload: str = ""               # L7 Application Payload (HTTP, DNS, etc.)
+    dpi_match: Any = None           # DPIMatch object if a signature was triggered
+
     # --- filled in by the firewall pipeline ---
     action: str = ""                # ALLOW / BLOCK
     reason: str = ""                # why that decision was taken
@@ -51,11 +56,19 @@ class Packet:
         from config import KIND_AUTH
         return self.kind == KIND_AUTH and not self.auth_success
 
+    @property
+    def payload_preview(self) -> str:
+        if not self.payload:
+            return "-"
+        clean = self.payload.replace("\r", " ").replace("\n", " ").strip()
+        return clean[:40] + "..." if len(clean) > 40 else clean
+
     def summary(self) -> str:
         flags_str = f" [{self.flags}]" if self.flags else ""
         state_str = f" ({self.conn_state})" if self.conn_state else ""
+        payload_str = f" | {self.payload_preview}" if self.payload else ""
         return (f"{self.src_ip}:{self.src_port} -> "
-                f"{self.dst_ip}:{self.dst_port} ({self.protocol}{flags_str}){state_str}")
+                f"{self.dst_ip}:{self.dst_port} ({self.protocol}{flags_str}){state_str}{payload_str}")
 
     def as_row(self) -> tuple:
         """Tuple used by the Traffic Monitor table."""
@@ -69,6 +82,7 @@ class Packet:
             self.flags or "-",
             self.conn_state or "-",
             self.kind,
+            self.payload_preview,
             self.action,
             self.reason,
         )

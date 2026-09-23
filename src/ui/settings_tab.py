@@ -33,6 +33,7 @@ class SettingsTab(ttk.Frame):
         self.policy = tk.StringVar()
         self.auto_block = tk.IntVar()
         self.stateful = tk.IntVar()
+        self.dpi_enabled = tk.IntVar()
         self.fields = {key: tk.StringVar() for key, _ in NUMERIC_FIELDS}
 
         self._build()
@@ -59,8 +60,13 @@ class SettingsTab(ttk.Frame):
                                                        sticky="w", pady=(8, 0))
 
         ttk.Checkbutton(policy_box,
+                        text="Enable Deep Packet Inspection (DPI / L7 Signatures: SQLi, XSS, Traversal)",
+                        variable=self.dpi_enabled).grid(row=2, column=0, columnspan=3,
+                                                       sticky="w", pady=(6, 0))
+
+        ttk.Checkbutton(policy_box,
                         text="Automatically blacklist an IP when an attack is detected",
-                        variable=self.auto_block).grid(row=2, column=0, columnspan=3,
+                        variable=self.auto_block).grid(row=3, column=0, columnspan=3,
                                                        sticky="w", pady=(6, 0))
 
         det_box = ttk.LabelFrame(self, text="  Detection thresholds  ", padding=12)
@@ -105,6 +111,7 @@ class SettingsTab(ttk.Frame):
         self.policy.set(db.get_setting("default_policy", "DENY"))
         self.auto_block.set(1 if db.get_bool_setting("auto_block") else 0)
         self.stateful.set(1 if db.get_bool_setting("stateful_inspection") else 0)
+        self.dpi_enabled.set(1 if db.get_bool_setting("dpi_enabled") else 0)
         for key, _ in NUMERIC_FIELDS:
             self.fields[key].set(db.get_setting(key))
 
@@ -123,6 +130,7 @@ class SettingsTab(ttk.Frame):
         db.set_setting("default_policy", self.policy.get())
         db.set_setting("auto_block", self.auto_block.get())
         db.set_setting("stateful_inspection", self.stateful.get())
+        db.set_setting("dpi_enabled", self.dpi_enabled.get())
         for key, value in values.items():
             db.set_setting(key, value)
 

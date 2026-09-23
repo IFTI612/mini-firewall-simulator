@@ -20,7 +20,8 @@ CREATE TABLE IF NOT EXISTS traffic_logs (
     rule_id   INTEGER DEFAULT 0,
     size      INTEGER DEFAULT 0,
     flags     TEXT DEFAULT '',
-    conn_state TEXT DEFAULT ''
+    conn_state TEXT DEFAULT '',
+    payload   TEXT DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_traffic_ts     ON traffic_logs (ts);

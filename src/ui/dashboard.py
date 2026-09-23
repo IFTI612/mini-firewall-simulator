@@ -100,16 +100,20 @@ class DashboardTab(ttk.Frame):
 
     def _draw_attacks(self):
         counts = self.controller.db.get_attack_counts()
-        labels = ["Port\nscan", "Brute\nforce", "Traffic\nflood", "Stealth\nscan"]
+        labels = ["Port\nscan", "Brute\nforce", "Flood", "Stealth", "SQLi", "XSS", "Traversal"]
         values = [counts.get(config.PORT_SCAN, 0),
                   counts.get(config.BRUTE_FORCE, 0),
                   counts.get(config.TRAFFIC_FLOOD, 0),
-                  counts.get(config.STEALTH_SCAN, 0)]
+                  counts.get(config.STEALTH_SCAN, 0),
+                  counts.get(config.SQL_INJECTION, 0),
+                  counts.get(config.XSS, 0),
+                  counts.get(config.PATH_TRAVERSAL, 0)]
 
         ax = self.ax_attacks
         ax.clear()
         bars = ax.bar(labels, values,
-                      color=[theme.ORANGE, theme.PURPLE, theme.RED, "#0284c7"], width=0.55)
+                      color=[theme.ORANGE, theme.PURPLE, theme.RED, "#0284c7", "#e11d48", "#f59e0b", "#8b5cf6"],
+                      width=0.6)
         for bar, value in zip(bars, values):
             ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
                     str(value), ha="center", va="bottom", fontsize=9)

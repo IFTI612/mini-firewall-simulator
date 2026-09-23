@@ -11,8 +11,8 @@ import config
 from ui import theme
 
 COLUMNS = ["ID", "Timestamp", "Source IP", "SPort", "Destination IP", "DPort",
-           "Proto", "Flags", "State", "Type", "Action", "Reason"]
-WIDTHS = [45, 140, 110, 55, 120, 55, 50, 65, 80, 65, 60, 230]
+           "Proto", "Flags", "State", "Type", "Payload", "Action", "Reason"]
+WIDTHS = [40, 135, 110, 50, 115, 50, 48, 60, 75, 55, 130, 60, 200]
 
 
 class LogsTab(ttk.Frame):
@@ -96,10 +96,12 @@ class LogsTab(ttk.Frame):
         self.tree.delete(*self.tree.get_children())
         for r in rows:
             tag = "allow" if r["action"] == "ALLOW" else "block"
+            payload_txt = (r.get("payload") or "").replace("\r", " ").replace("\n", " ").strip()
+            preview = payload_txt[:35] + "..." if len(payload_txt) > 35 else (payload_txt or "-")
             self.tree.insert("", "end", values=(
                 r["id"], r["ts_text"], r["src_ip"], r["src_port"], r["dst_ip"],
                 r["dst_port"], r["protocol"], r.get("flags") or "-",
-                r.get("conn_state") or "-", r["kind"], r["action"],
+                r.get("conn_state") or "-", r["kind"], preview, r["action"],
                 r["reason"] or ""), tags=(tag,))
         self.status.config(text=f"{len(rows)} row(s) shown.")
 

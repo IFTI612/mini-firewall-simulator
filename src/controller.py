@@ -64,6 +64,16 @@ class Controller:
         # 2. attack detection (runs on every packet, blocked or not —
         #    we still want to *see* an attack even while we drop it)
         alerts = self.detector.inspect(packet)
+        if hasattr(packet, "dpi_match") and packet.dpi_match:
+            match = packet.dpi_match
+            from models.alert import Alert
+            alerts.append(Alert(
+                attack_type=match.attack_type,
+                source_ip=packet.src_ip,
+                severity=match.severity,
+                details=f"DPI [{match.name}]: '{match.snippet}'",
+                timestamp=packet.timestamp,
+            ))
 
         # 3. auto-block before the alert is stored, so the alert row
         #    records whether the IP was blacklisted

